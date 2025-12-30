@@ -1,28 +1,25 @@
-import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+"use client";
 
-// NOTE: This app is designed to accept an uploaded manifest (PDF or CSV),
-// automatically extract package barcodes, then match them against scanned barcodes
+import { useState } from "react";
 
 export default function ManifestScannerApp() {
-  const [manifestPackages, setManifestPackages] = useState([]);
-  const [scannedPackages, setScannedPackages] = useState([]);
+  const [manifestPackages, setManifestPackages] = useState<string[]>([]);
+  const [scannedPackages, setScannedPackages] = useState<string[]>([]);
   const [scanInput, setScanInput] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // Handles CSV or text-based manifest uploads
-  const handleManifestUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleManifestUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    setManifestName(file.name);
 
+    setManifestName(file.name);
     const text = await file.text();
 
-    // METRC package IDs usually start with "1A" and are 24–26 chars long
+    // METRC package IDs
     const matches = text.match(/1A[A-Z0-9]{20,26}/g) || [];
-    const unique = [...new Set(matches)];
+    const unique = Array.from(new Set(matches));
 
     setManifestPackages(unique);
     setScannedPackages([]);
@@ -30,7 +27,7 @@ export default function ManifestScannerApp() {
 
   const scanBarcode = () => {
     if (!scanInput) return;
-    setScannedPackages((prev) => [...prev, scanInput]);
+    setScannedPackages((prev) => [...prev, scanInput.trim()]);
     setScanInput("");
   };
 
@@ -39,57 +36,61 @@ export default function ManifestScannerApp() {
   );
 
   return (
-    <div className="p-6 grid gap-4 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold">Manifest Barcode Verification</h1>
+    <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
+      <h1>Manifest Barcode Verification</h1>
 
-      <Card>
-        <CardContent className="p-4 grid gap-2">
-          <label className="font-medium">Upload Manifest (PDF / CSV / TXT)</label>
-          <Input type="file" accept=".pdf,.csv,.txt" onChange={handleManifestUpload} />
-          {manifestName && (
-            <p className="text-sm text-muted-foreground">Loaded: {manifestName}</p>
-          )}
-        </CardContent>
-      </Card>
+      <section style={{ marginTop: 24 }}>
+        <label>
+          <strong>Upload Manifest (PDF / CSV / TXT)</strong>
+        </label>
+        <br />
+        <input type="file" accept=".pdf,.csv,.txt" onChange={handleManifestUpload} />
+        {manifestName && <p>Loaded: {manifestName}</p>}
+      </section>
 
-      <Card>
-        <CardContent className="p-4 grid gap-2">
-          <label className="font-medium">Scan Package Barcode</label>
-          <Input
-            value={scanInput}
-            onChange={(e) => setScanInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && scanBarcode()}
-            placeholder="Scan barcode here"
-            disabled={manifestPackages.length === 0}
-          />
-          <Button onClick={scanBarcode} disabled={manifestPackages.length === 0}>
-            Add Scan
-          </Button>
-        </CardContent>
-      </Card>
+      <section style={{ marginTop: 24 }}>
+        <label>
+          <strong>Scan Package Barcode</strong>
+        </label>
+        <br />
+        <input
+          type="text"
+          value={scanInput}
+          placeholder="Scan barcode here"
+          onChange={(e) => setScanInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && scanBarcode()}
+          disabled={manifestPackages.length === 0}
+        />
+        <button
+          style={{ marginLeft: 8 }}
+          onClick={scanBarcode}
+          disabled={manifestPackages.length === 0}
+        >
+          Add Scan
+        </button>
+      </section>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="font-semibold">Status</h2>
-          <p>Manifest Packages: {manifestPackages.length}</p>
-          <p>Scanned Packages: {scannedPackages.length}</p>
-          <p
-            className={
-              missingPackages.length ? "text-red-600" : "text-green-600"
-            }
-          >
-            Missing Packages: {missingPackages.length}
-          </p>
+      <section style={{ marginTop: 32 }}>
+        <h3>Status</h3>
+        <p>Expected: {manifestPackages.length}</p>
+        <p>Scanned: {scannedPackages.length}</p>
+        <p
+          style={{
+            color: missingPackages.length ? "red" : "green",
+            fontWeight: "bold",
+          }}
+        >
+          Missing: {missingPackages.length}
+        </p>
 
-          {missingPackages.length > 0 && (
-            <ul className="mt-2 text-sm text-red-600 max-h-40 overflow-auto">
-              {missingPackages.map((id) => (
-                <li key={id}>{id}</li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {missingPackages.length > 0 && (
+          <ul>
+            {missingPackages.map((id) => (
+              <li key={id}>{id}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
   );
 }
