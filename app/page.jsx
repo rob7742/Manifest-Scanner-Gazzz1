@@ -1,0 +1,90 @@
+"use client";
+
+import { useState } from "react";
+
+export default function ManifestScannerApp() {
+  const [manifestPackages, setManifestPackages] = useState([]);
+  const [scannedPackages, setScannedPackages] = useState([]);
+  const [scanInput, setScanInput] = useState("");
+  const [manifestName, setManifestName] = useState("");
+
+  const handleManifestUpload = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    setManifestName(file.name);
+    const text = await file.text();
+
+    // METRC-style package IDs
+    const matches = text.match(/1A[A-Z0-9]{20,26}/g) || [];
+    const unique = Array.from(new Set(matches));
+
+    setManifestPackages(unique);
+    setScannedPackages([]);
+  };
+
+  const scanBarcode = () => {
+    if (!scanInput) return;
+    setScannedPackages((prev) => [...prev, scanInput.trim()]);
+    setScanInput("");
+  };
+
+  const missingPackages = manifestPackages.filter(
+    (id) => !scannedPackages.includes(id)
+  );
+
+  return (
+    <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
+      <h1>Manifest Barcode Verification</h1>
+
+      <section style={{ marginTop: 24 }}>
+        <strong>Upload Manifest (PDF / CSV / TXT)</strong>
+        <br />
+        <input type="file" accept=".pdf,.csv,.txt" onChange={handleManifestUpload} />
+        {manifestName && <p>Loaded: {manifestName}</p>}
+      </section>
+
+      <section style={{ marginTop: 24 }}>
+        <strong>Scan Package Barcode</strong>
+        <br />
+        <input
+          type="text"
+          value={scanInput}
+          placeholder="Scan barcode here"
+          onChange={(e) => setScanInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && scanBarcode()}
+          disabled={manifestPackages.length === 0}
+        />
+        <button
+          style={{ marginLeft: 8 }}
+          onClick={scanBarcode}
+          disabled={manifestPackages.length === 0}
+        >
+          Add Scan
+        </button>
+      </section>
+
+      <section style={{ marginTop: 32 }}>
+        <h3>Status</h3>
+        <p>Expected: {manifestPackages.length}</p>
+        <p>Scanned: {scannedPackages.length}</p>
+        <p
+          style={{
+            color: missingPackages.length ? "red" : "green",
+            fontWeight: "bold",
+          }}
+        >
+          Missing: {missingPackages.length}
+        </p>
+
+        {missingPackages.length > 0 && (
+          <ul>
+            {missingPackages.map((id) => (
+              <li key={id}>{id}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
+  );
+}
