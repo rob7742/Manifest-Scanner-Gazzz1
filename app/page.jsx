@@ -8,7 +8,33 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // 🔒 STRICT: METRC PACKAGE IDS ONLY
+  /* 🔊 Beep Functions */
+  const playBeep = (frequency, duration = 120) => {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequency;
+    oscillator.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    oscillator.start();
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      audioCtx.currentTime + duration / 1000
+    );
+
+    setTimeout(() => {
+      oscillator.stop();
+      audioCtx.close();
+    }, duration);
+  };
+
+  const successBeep = () => playBeep(800);
+  const errorBeep = () => playBeep(200, 200);
+
+  /* 🔒 METRC PACKAGE ID FILTER */
   const extractMetrcIds = (text) => {
     return [
       ...new Set(
@@ -17,37 +43,40 @@ export default function Page() {
     ];
   };
 
-  // Upload manifest (PDF/TXT/CSV converted to text)
+  /* 📤 Upload Manifest */
   const handleManifestUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setManifestName(file.name);
-
     const text = await file.text();
-    const packages = extractMetrcIds(text);
 
+    const packages = extractMetrcIds(text);
     setManifestPackages(packages);
     setScannedPackages([]);
   };
 
-  // Add scanned barcode
+  /* 🔫 Scan Barcode */
   const handleAdd = () => {
     const code = barcode.trim();
 
-    // 🔒 Reject non-METRC scans
+    // ❌ Invalid code
     if (!/^\b1A[A-Z0-9]{22}\b$/.test(code)) {
+      errorBeep();
       setBarcode("");
       return;
     }
 
+    // ❌ Duplicate scan
     if (scannedPackages.includes(code)) {
-      alert("Duplicate scan detected");
+      errorBeep();
       setBarcode("");
       return;
     }
 
+    // ✅ Valid scan
     setScannedPackages((prev) => [...prev, code]);
+    successBeep();
     setBarcode("");
   };
 
