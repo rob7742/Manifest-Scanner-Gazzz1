@@ -42,12 +42,18 @@ export default function Page() {
 
       <div style={{ marginTop: 20 }}>
         <strong>Scan Barcode</strong><br />
-        <input
-          value={scanInput}
-          onChange={(e) => setScanInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && scanBarcode()}
-          disabled={!manifestPackages.length}
-        />
+       <input
+  type="text"
+  value={barcode}
+  onChange={(e) => setBarcode(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      handleAdd();
+    }
+  }}
+  autoFocus
+/>
+
         <button onClick={scanBarcode} disabled={!manifestPackages.length}>
           Add
         </button>
