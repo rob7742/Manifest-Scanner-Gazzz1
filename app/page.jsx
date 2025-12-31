@@ -8,15 +8,14 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-const handleAdd = () => {
-  const code = barcode.trim();
-  if (!code) return;
+  const handleManifestUpload = async (event) => { ... };
 
-  if (scannedPackages.includes(code)) {
-    alert("Duplicate scan detected");
-    setBarcode("");
-    return;
-  }
+  const handleAdd = () => { ... };
+
+  return (
+    ...
+  );
+}
 
   setScannedPackages(prev => [...prev, code]);
   setBarcode("");
@@ -34,7 +33,7 @@ const handleAdd = () => {
 
       <div style={{ marginTop: 20 }}>
         <strong>Scan Barcode</strong><br />
-      <input
+<input
   type="text"
   value={barcode}
   onChange={(e) => setBarcode(e.target.value)}
