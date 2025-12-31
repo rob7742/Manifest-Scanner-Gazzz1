@@ -1,16 +1,12 @@
 "use client";
 
-  const handleManifestUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+import { useState } from "react";
 
-    setManifestName(file.name);
-    const text = await file.text();
-
-    const matches = text.match(/1A[A-Z0-9]{20,26}/g) || [];
-    setManifestPackages([...new Set(matches)]);
-    setScannedPackages([]);
-  };
+export default function Page() {
+  const [manifestPackages, setManifestPackages] = useState([]);
+  const [scannedPackages, setScannedPackages] = useState([]);
+  const [barcode, setBarcode] = useState("");
+  const [manifestName, setManifestName] = useState("");
 
 const handleAdd = () => {
   const code = barcode.trim();
@@ -22,7 +18,7 @@ const handleAdd = () => {
     return;
   }
 
-  setScannedPackages((prev) => [...prev, code]);
+  setScannedPackages(prev => [...prev, code]);
   setBarcode("");
 };
 
@@ -38,14 +34,12 @@ const handleAdd = () => {
 
       <div style={{ marginTop: 20 }}>
         <strong>Scan Barcode</strong><br />
-       <input
+      <input
   type="text"
   value={barcode}
   onChange={(e) => setBarcode(e.target.value)}
   onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      handleAdd();
-    }
+    if (e.key === "Enter") handleAdd();
   }}
   autoFocus
 />
