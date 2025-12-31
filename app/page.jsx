@@ -20,15 +20,19 @@ export default function Page() {
     setScannedPackages([]);
   };
 
-  const scanBarcode = () => {
-    if (!scanInput) return;
-    setScannedPackages((prev) => [...prev, scanInput.trim()]);
-    setScanInput("");
-  };
+const handleAdd = () => {
+  const code = barcode.trim();
+  if (!code) return;
 
-  const missing = manifestPackages.filter(
-    (id) => !scannedPackages.includes(id)
-  );
+  if (scannedPackages.includes(code)) {
+    alert("Duplicate scan detected");
+    setBarcode("");
+    return;
+  }
+
+  setScannedPackages((prev) => [...prev, code]);
+  setBarcode("");
+};
 
   return (
     <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
@@ -54,9 +58,10 @@ export default function Page() {
   autoFocus
 />
 
-        <button onClick={scanBarcode} disabled={!manifestPackages.length}>
-          Add
-        </button>
+        <button onClick={handleAdd} disabled={!manifestPackages.length}>
+  Add
+</button>
+
       </div>
 
       <div style={{ marginTop: 30 }}>
