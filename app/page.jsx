@@ -1,13 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
-export default function Page() {
-  const [manifestPackages, setManifestPackages] = useState([]);
-  const [scannedPackages, setScannedPackages] = useState([]);
-  const [scanInput, setScanInput] = useState("");
-  const [manifestName, setManifestName] = useState("");
-
   const handleManifestUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
