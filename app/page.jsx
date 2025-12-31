@@ -8,29 +8,39 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // 🔹 Upload + parse manifest (PACKAGE IDS ONLY)
+  // 🔒 STRICT PACKAGE ID FILTER
+  const extractPackageIds = (text) => {
+    return [
+      ...new Set(
+        (text.match(/\b1A4[A-Z0-9]{21}\b/g) || [])
+      )
+    ];
+  };
+
+  // Upload + parse manifest
   const handleManifestUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     setManifestName(file.name);
 
     const text = await file.text();
 
-    // ✅ Only package IDs (uppercase alphanumeric, 20–32 chars)
-    const packageIdRegex = /\b[A-Z0-9]{20,32}\b/g;
+    const packages = extractPackageIds(text);
 
-    const matches = text.match(packageIdRegex) || [];
-    const uniquePackages = [...new Set(matches)];
-
-    setManifestPackages(uniquePackages);
+    setManifestPackages(packages);
     setScannedPackages([]);
   };
 
-  // 🔹 Add scanned barcode (auto / manual)
+  // Add scanned barcode
   const handleAdd = () => {
     const code = barcode.trim();
-    if (!code) return;
+
+    // 🔒 Ignore non-package scans
+    if (!/^\b1A4[A-Z0-9]{21}\b$/.test(code)) {
+      setBarcode("");
+      return;
+    }
 
     if (scannedPackages.includes(code)) {
       alert("Duplicate scan detected");
@@ -42,22 +52,14 @@ export default function Page() {
     setBarcode("");
   };
 
-  // 🔹 Missing packages
   const missing = manifestPackages.filter(
     (id) => !scannedPackages.includes(id)
   );
 
   return (
-    <main
-      style={{
-        maxWidth: 600,
-        margin: "40px auto",
-        fontFamily: "sans-serif",
-      }}
-    >
+    <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h1>Manifest Barcode Verification</h1>
 
-      {/* Upload Manifest */}
       <div style={{ marginTop: 20 }}>
         <strong>Upload Manifest</strong>
         <br />
@@ -65,39 +67,27 @@ export default function Page() {
         {manifestName && <p>Loaded: {manifestName}</p>}
       </div>
 
-      {/* Scan Barcode */}
       <div style={{ marginTop: 20 }}>
-        <strong>Scan Barcode</strong>
+        <strong>Scan Package Barcode</strong>
         <br />
         <input
           type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleAdd();
-          }}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           autoFocus
+          disabled={!manifestPackages.length}
         />
         <br />
-        <button
-          onClick={handleAdd}
-          disabled={!manifestPackages.length}
-          style={{ marginTop: 10 }}
-        >
+        <button onClick={handleAdd} disabled={!manifestPackages.length}>
           Add
         </button>
       </div>
 
-      {/* Counts */}
-      <div involvement={{ marginTop: 30 }}>
+      <div style={{ marginTop: 30 }}>
         <p>Expected: {manifestPackages.length}</p>
         <p>Scanned: {scannedPackages.length}</p>
-        <p
-          style={{
-            color: missing.length ? "red" : "green",
-            fontWeight: "bold",
-          }}
-        >
+        <p style={{ color: missing.length ? "red" : "green", fontWeight: "bold" }}>
           Missing: {missing.length}
         </p>
 
