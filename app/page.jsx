@@ -8,16 +8,16 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // 🔒 STRICT PACKAGE ID FILTER
-  const extractPackageIds = (text) => {
+  // 🔒 STRICT: METRC PACKAGE IDS ONLY
+  const extractMetrcIds = (text) => {
     return [
       ...new Set(
-        (text.match(/\b1A4[A-Z0-9]{21}\b/g) || [])
+        (text.match(/\b1A[A-Z0-9]{22}\b/g) || [])
       )
     ];
   };
 
-  // Upload + parse manifest
+  // Upload manifest (PDF/TXT/CSV converted to text)
   const handleManifestUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -25,8 +25,7 @@ export default function Page() {
     setManifestName(file.name);
 
     const text = await file.text();
-
-    const packages = extractPackageIds(text);
+    const packages = extractMetrcIds(text);
 
     setManifestPackages(packages);
     setScannedPackages([]);
@@ -36,8 +35,8 @@ export default function Page() {
   const handleAdd = () => {
     const code = barcode.trim();
 
-    // 🔒 Ignore non-package scans
-    if (!/^\b1A4[A-Z0-9]{21}\b$/.test(code)) {
+    // 🔒 Reject non-METRC scans
+    if (!/^\b1A[A-Z0-9]{22}\b$/.test(code)) {
       setBarcode("");
       return;
     }
@@ -61,27 +60,20 @@ export default function Page() {
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest</strong>
-        <br />
-        <input type="file" onChange={handleManifestUpload} />
+        <strong>Upload Manifest</strong><br />
+        <input type="file" accept=".txt,.csv" onChange={handleManifestUpload} />
         {manifestName && <p>Loaded: {manifestName}</p>}
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Scan Package Barcode</strong>
-        <br />
+        <strong>Scan METRC Package</strong><br />
         <input
-          type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           autoFocus
           disabled={!manifestPackages.length}
         />
-        <br />
-        <button onClick={handleAdd} disabled={!manifestPackages.length}>
-          Add
-        </button>
       </div>
 
       <div style={{ marginTop: 30 }}>
