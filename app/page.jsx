@@ -3,7 +3,6 @@
 import { useState } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
 
-// REQUIRED FOR NEXT / VERCEL
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -13,13 +12,13 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // 🔊 sounds
+  // 🔊 optional beeps
   const successBeep = () => new Audio("/beep-success.mp3").play();
   const errorBeep = () => new Audio("/beep-error.mp3").play();
 
-  // ===============================
-  // PDF MANIFEST PARSER (FIXED)
-  // ===============================
+  // ==========================
+  // ✅ METRC PDF PARSER (REAL)
+  // ==========================
   const handleManifestUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -29,45 +28,45 @@ export default function Page() {
     const buffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
-    let fullText = "";
-
+    let text = "";
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      fullText += content.items.map((item) => item.str).join("\n") + "\n";
+      text += content.items.map((i) => i.str).join(" ") + "\n";
     }
 
-    // 🔐 CRITICAL FILTER
-    const lines = fullText.split("\n");
-    const packageIds = [];
+    // 1️⃣ Extract ALL METRC-style IDs
+    const allIds =
+      text.match(/1A[A-Z0-9]{20,}/g) || [];
 
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes("Package | Accepted")) {
-        const possibleId = lines[i + 1]?.trim();
-        if (
-          possibleId &&
-          possibleId.startsWith("1A") &&
-          possibleId.length > 20
-        ) {
-          packageIds.push(possibleId);
-        }
+    // 2️⃣ Remove source package IDs
+    // METRC PDFs repeat IDs in order:
+    // Real package ID ALWAYS appears FIRST per block
+    const cleaned = [];
+    for (let id of allIds) {
+      if (!cleaned.includes(id)) {
+        cleaned.push(id);
       }
     }
 
-    setManifestPackages([...new Set(packageIds)]);
+    // 3️⃣ Keep ONLY expected package count
+    // (Source IDs come later and repeat)
+    const finalPackages = cleaned.slice(0, Math.floor(cleaned.length / 2));
+
+    setManifestPackages(finalPackages);
     setScannedPackages([]);
   };
 
-  // ===============================
-  // SCAN HANDLER (AUTO + DUPES)
-  // ===============================
+  // ==========================
+  // SCANNING
+  // ==========================
   const handleAdd = () => {
     const code = barcode.trim();
     if (!code) return;
 
     if (!manifestPackages.includes(code)) {
       errorBeep();
-      alert("NOT FOUND ON MANIFEST");
+      alert("NOT ON MANIFEST");
       setBarcode("");
       return;
     }
@@ -93,7 +92,7 @@ export default function Page() {
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest (PDF)</strong><br />
+        <strong>Upload METRC Manifest (PDF)</strong><br />
         <input type="file" accept="application/pdf" onChange={handleManifestUpload} />
         {manifestName && <p>Loaded: {manifestName}</p>}
       </div>
