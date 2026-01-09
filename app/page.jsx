@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function Page() {
   const [manifestPackages, setManifestPackages] = useState([]);
   const [scannedPackages, setScannedPackages] = useState([]);
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
+  const [debugTextLength, setDebugTextLength] = useState(0);
   const [debugFound, setDebugFound] = useState(0);
 
   /* 🔊 Beeps */
@@ -18,7 +23,10 @@ export default function Page() {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration / 1000);
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      ctx.currentTime + duration / 1000
+    );
     setTimeout(() => {
       osc.stop();
       ctx.close();
@@ -28,29 +36,29 @@ export default function Page() {
   const successBeep = () => playBeep(800);
   const errorBeep = () => playBeep(200, 200);
 
-  /* 🔍 REAL-WORLD METRC PACKAGE EXTRACTION */
+  /* 🔍 METRC ID EXTRACTION */
   const extractMetrcIds = (text) => {
-    /**
-     * Matches:
-     * - Starts with 1A
-     * - Uppercase letters + numbers
-     * - Length 22–30 (covers ALL known METRC formats)
-     */
     const regex = /\b1A[A-Z0-9]{20,28}\b/g;
-    const matches = text.match(regex) || [];
-    return [...new Set(matches)];
+    return [...new Set(text.match(regex) || [])];
   };
 
-  /* 📤 Upload Manifest */
-  const handleManifestUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /* 📄 PDF Handler */
+  const handlePdfUpload = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
-    setManifestName(file.name);
+    let fullText = "";
 
-    const text = await file.text();
-    const packages = extractMetrcIds(text);
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((i) => i.str).join(" ");
+      fullText += "\n" + pageText;
+    }
 
+    setDebugTextLength(fullText.length);
+
+    const packages = extractMetrcIds(fullText);
     setDebugFound(packages.length);
     setManifestPackages(packages);
     setScannedPackages([]);
@@ -58,7 +66,26 @@ export default function Page() {
     if (!packages.length) errorBeep();
   };
 
-  /* 🔫 Scan Handler */
+  /* 📤 Upload Handler */
+  const handleManifestUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setManifestName(file.name);
+
+    if (file.type === "application/pdf") {
+      await handlePdfUpload(file);
+    } else {
+      const text = await file.text();
+      setDebugTextLength(text.length);
+      const packages = extractMetrcIds(text);
+      setDebugFound(packages.length);
+      setManifestPackages(packages);
+      setScannedPackages([]);
+    }
+  };
+
+  /* 🔫 Scan */
   const handleAdd = () => {
     const code = barcode.trim();
 
@@ -84,15 +111,20 @@ export default function Page() {
   );
 
   return (
-    <main style={{ maxWidth: 650, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <main style={{ maxWidth: 680, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest (TXT / CSV)</strong><br />
-        <input type="file" accept=".txt,.csv" onChange={handleManifestUpload} />
+        <strong>Upload Manifest (PDF / TXT / CSV)</strong><br />
+        <input
+          type="file"
+          accept=".pdf,.txt,.csv"
+          onChange={handleManifestUpload}
+        />
         {manifestName && <p>Loaded: {manifestName}</p>}
         <p style={{ fontSize: 12 }}>
-          IDs detected in manifest: <strong>{debugFound}</strong>
+          Extracted text length: <strong>{debugTextLength}</strong><br />
+          Package IDs detected: <strong>{debugFound}</strong>
         </p>
       </div>
 
