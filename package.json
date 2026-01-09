@@ -1,16 +1,106 @@
-{
-  "name": "manifest-scanner",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "next": "14.0.4",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "pdfjs-dist": "^3.11.174",
-    "tesseract.js": "^5.0.4"
-  }
+"use client";
+
+import { useState } from "react";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import Tesseract from "tesseract.js";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+export default function Page() {
+  const [manifestPackages, setManifestPackages] = useState([]);
+  const [scannedPackages, setScannedPackages] = useState([]);
+  const [barcode, setBarcode] = useState("");
+  const [status, setStatus] = useState("");
+
+  const handleManifestUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setStatus("Reading manifest…");
+
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+    let foundIds = new Set();
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      setStatus(`OCR page ${i} of ${pdf.numPages}…`);
+
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 3 });
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const {
+        data: { text },
+      } = await Tesseract.recognize(canvas, "eng");
+
+      const matches = text.match(/1A[A-Z0-9]{20,}/g) || [];
+      matches.forEach((id) => foundIds.add(id));
+    }
+
+    // METRC manifests repeat IDs; keep real package count only
+    const ids = Array.from(foundIds);
+
+    setManifestPackages(ids);
+    setScannedPackages([]);
+    setStatus(`Loaded ${ids.length} packages`);
+  };
+
+  const handleAdd = () => {
+    const code = barcode.trim();
+    if (!code) return;
+
+    if (!manifestPackages.includes(code)) {
+      alert("NOT ON MANIFEST");
+      setBarcode("");
+      return;
+    }
+
+    if (scannedPackages.includes(code)) {
+      alert("DUPLICATE SCAN");
+      setBarcode("");
+      return;
+    }
+
+    setScannedPackages((prev) => [...prev, code]);
+    setBarcode("");
+  };
+
+  const missing = manifestPackages.filter(
+    (id) => !scannedPackages.includes(id)
+  );
+
+  return (
+    <main style={{ maxWidth: 700, margin: "40px auto" }}>
+      <h1>Manifest Barcode Verification</h1>
+
+      <input type="file" accept="application/pdf" onChange={handleManifestUpload} />
+      <p>{status}</p>
+
+      <input
+        placeholder="Scan barcode"
+        value={barcode}
+        onChange={(e) => setBarcode(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        autoFocus
+      />
+
+      <p>Expected: {manifestPackages.length}</p>
+      <p>Scanned: {scannedPackages.length}</p>
+      <p style={{ color: missing.length ? "red" : "green" }}>
+        Missing: {missing.length}
+      </p>
+
+      {missing.length > 0 && (
+        <ul>{missing.map((id) => <li key={id}>{id}</li>)}</ul>
+      )}
+    </main>
+  );
 }
