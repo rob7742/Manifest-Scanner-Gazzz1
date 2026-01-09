@@ -7,74 +7,73 @@ export default function Page() {
   const [scannedPackages, setScannedPackages] = useState([]);
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
+  const [debugFound, setDebugFound] = useState(0);
 
-  /* 🔊 Beep Functions */
-  const playBeep = (frequency, duration = 120) => {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    oscillator.type = "sine";
-    oscillator.frequency.value = frequency;
-    oscillator.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    oscillator.start();
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      audioCtx.currentTime + duration / 1000
-    );
-
+  /* 🔊 Beeps */
+  const playBeep = (freq, duration = 120) => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration / 1000);
     setTimeout(() => {
-      oscillator.stop();
-      audioCtx.close();
+      osc.stop();
+      ctx.close();
     }, duration);
   };
 
   const successBeep = () => playBeep(800);
   const errorBeep = () => playBeep(200, 200);
 
-  /* 🔒 METRC PACKAGE ID FILTER */
+  /* 🔍 REAL-WORLD METRC PACKAGE EXTRACTION */
   const extractMetrcIds = (text) => {
-    return [
-      ...new Set(
-        (text.match(/\b1A[A-Z0-9]{22}\b/g) || [])
-      )
-    ];
+    /**
+     * Matches:
+     * - Starts with 1A
+     * - Uppercase letters + numbers
+     * - Length 22–30 (covers ALL known METRC formats)
+     */
+    const regex = /\b1A[A-Z0-9]{20,28}\b/g;
+    const matches = text.match(regex) || [];
+    return [...new Set(matches)];
   };
 
   /* 📤 Upload Manifest */
-  const handleManifestUpload = async (event) => {
-    const file = event.target.files?.[0];
+  const handleManifestUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setManifestName(file.name);
-    const text = await file.text();
 
+    const text = await file.text();
     const packages = extractMetrcIds(text);
+
+    setDebugFound(packages.length);
     setManifestPackages(packages);
     setScannedPackages([]);
+
+    if (!packages.length) errorBeep();
   };
 
-  /* 🔫 Scan Barcode */
+  /* 🔫 Scan Handler */
   const handleAdd = () => {
     const code = barcode.trim();
 
-    // ❌ Invalid code
-    if (!/^\b1A[A-Z0-9]{22}\b$/.test(code)) {
+    if (!/^1A[A-Z0-9]{20,28}$/.test(code)) {
       errorBeep();
       setBarcode("");
       return;
     }
 
-    // ❌ Duplicate scan
     if (scannedPackages.includes(code)) {
       errorBeep();
       setBarcode("");
       return;
     }
 
-    // ✅ Valid scan
     setScannedPackages((prev) => [...prev, code]);
     successBeep();
     setBarcode("");
@@ -85,13 +84,16 @@ export default function Page() {
   );
 
   return (
-    <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <main style={{ maxWidth: 650, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest</strong><br />
+        <strong>Upload Manifest (TXT / CSV)</strong><br />
         <input type="file" accept=".txt,.csv" onChange={handleManifestUpload} />
         {manifestName && <p>Loaded: {manifestName}</p>}
+        <p style={{ fontSize: 12 }}>
+          IDs detected in manifest: <strong>{debugFound}</strong>
+        </p>
       </div>
 
       <div style={{ marginTop: 20 }}>
@@ -111,14 +113,6 @@ export default function Page() {
         <p style={{ color: missing.length ? "red" : "green", fontWeight: "bold" }}>
           Missing: {missing.length}
         </p>
-
-        {missing.length > 0 && (
-          <ul>
-            {missing.map((id) => (
-              <li key={id}>{id}</li>
-            ))}
-          </ul>
-        )}
       </div>
     </main>
   );
