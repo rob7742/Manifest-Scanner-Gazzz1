@@ -7,47 +7,19 @@ export default function Page() {
   const [scannedPackages, setScannedPackages] = useState([]);
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
-  const [debugFound, setDebugFound] = useState(0);
 
-  /* 🔊 Beeps */
-  const playBeep = (freq, duration = 120) => {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = freq;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      ctx.currentTime + duration / 1000
-    );
-    setTimeout(() => {
-      osc.stop();
-      ctx.close();
-    }, duration);
-  };
-
-  const successBeep = () => playBeep(800);
-  const errorBeep = () => playBeep(200, 200);
-
-  /* 🔒 METRC PACKAGE ID VALIDATION */
-  const isValidMetrcId = (value) =>
-    /^1A[A-Z0-9]{20,28}$/.test(value);
-
-  /* 📄 CSV PARSER – PACKAGE ID COLUMN ONLY */
+  // 🔹 CSV PACKAGE-ID-ONLY EXTRACTOR
   const extractPackagesFromCsv = (text) => {
-    const lines = text.split(/\r?\n/);
+    const lines = text.split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const headers = lines[0]
+      .split(",")
+      .map((h) => h.trim().toLowerCase());
 
-    // Find the Package ID column
+    // STRICT match — avoids Source / Parent / Origin IDs
     const packageIdIndex = headers.findIndex(
-      (h) =>
-        h === "package id" ||
-        h === "packageid" ||
-        h.includes("package id")
+      (h) => h === "package id" || h === "package_id"
     );
 
     if (packageIdIndex === -1) return [];
@@ -57,7 +29,9 @@ export default function Page() {
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",");
       const value = cols[packageIdIndex]?.trim();
-      if (value && isValidMetrcId(value)) {
+
+      // METRC Package ID format ONLY
+      if (value && /^1A[A-Z0-9]{20,28}$/.test(value)) {
         packages.push(value);
       }
     }
@@ -65,48 +39,38 @@ export default function Page() {
     return [...new Set(packages)];
   };
 
-  /* 📤 Upload Handler */
-  const handleManifestUpload = async (e) => {
-    const file = e.target.files?.[0];
+  // 🔹 FILE UPLOAD HANDLER
+  const handleManifestUpload = async (event) => {
+    const file = event.target.files[0];
     if (!file) return;
 
     setManifestName(file.name);
 
     const text = await file.text();
-    let packages = [];
-
-    if (file.name.toLowerCase().endsWith(".csv")) {
-      packages = extractPackagesFromCsv(text);
-    } else {
-      // TXT fallback (strict filtering)
-      packages = [...new Set(text.match(/\b1A[A-Z0-9]{20,28}\b/g) || [])];
-    }
+    const packages = extractPackagesFromCsv(text);
 
     setManifestPackages(packages);
-    setDebugFound(packages.length);
     setScannedPackages([]);
-
-    if (!packages.length) errorBeep();
   };
 
-  /* 🔫 Scan Handler */
+  // 🔹 SCAN / ADD HANDLER (NO DUPLICATES)
   const handleAdd = () => {
     const code = barcode.trim();
+    if (!code) return;
 
-    if (!isValidMetrcId(code)) {
-      errorBeep();
+    if (!manifestPackages.includes(code)) {
+      alert("❌ Package NOT on manifest");
       setBarcode("");
       return;
     }
 
     if (scannedPackages.includes(code)) {
-      errorBeep();
+      alert("⚠️ Duplicate scan detected");
       setBarcode("");
       return;
     }
 
     setScannedPackages((prev) => [...prev, code]);
-    successBeep();
     setBarcode("");
   };
 
@@ -119,27 +83,27 @@ export default function Page() {
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest (CSV recommended)</strong><br />
-        <input
-          type="file"
-          accept=".csv,.txt"
-          onChange={handleManifestUpload}
-        />
+        <strong>Upload Manifest (CSV)</strong>
+        <br />
+        <input type="file" accept=".csv,text/csv" onChange={handleManifestUpload} />
         {manifestName && <p>Loaded: {manifestName}</p>}
-        <p style={{ fontSize: 12 }}>
-          Package IDs detected: <strong>{debugFound}</strong>
-        </p>
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Scan METRC Package</strong><br />
+        <strong>Scan Barcode</strong>
+        <br />
         <input
+          type="text"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleAdd();
+          }}
           autoFocus
-          disabled={!manifestPackages.length}
         />
+        <button onClick={handleAdd} disabled={!manifestPackages.length}>
+          Add
+        </button>
       </div>
 
       <div style={{ marginTop: 30 }}>
@@ -148,6 +112,14 @@ export default function Page() {
         <p style={{ color: missing.length ? "red" : "green", fontWeight: "bold" }}>
           Missing: {missing.length}
         </p>
+
+        {missing.length > 0 && (
+          <ul>
+            {missing.map((id) => (
+              <li key={id}>{id}</li>
+            ))}
+          </ul>
+        )}
       </div>
     </main>
   );
