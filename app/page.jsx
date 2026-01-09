@@ -1,17 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function Page() {
   const [manifestPackages, setManifestPackages] = useState([]);
   const [scannedPackages, setScannedPackages] = useState([]);
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
-  const [debugTextLength, setDebugTextLength] = useState(0);
   const [debugFound, setDebugFound] = useState(0);
 
   /* 🔊 Beeps */
@@ -36,34 +31,38 @@ export default function Page() {
   const successBeep = () => playBeep(800);
   const errorBeep = () => playBeep(200, 200);
 
-  /* 🔍 METRC ID EXTRACTION */
-  const extractMetrcIds = (text) => {
-    const regex = /\b1A[A-Z0-9]{20,28}\b/g;
-    return [...new Set(text.match(regex) || [])];
-  };
+  /* 🔒 METRC PACKAGE ID VALIDATION */
+  const isValidMetrcId = (value) =>
+    /^1A[A-Z0-9]{20,28}$/.test(value);
 
-  /* 📄 PDF Handler */
-  const handlePdfUpload = async (file) => {
-    const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  /* 📄 CSV PARSER – PACKAGE ID COLUMN ONLY */
+  const extractPackagesFromCsv = (text) => {
+    const lines = text.split(/\r?\n/);
+    if (lines.length < 2) return [];
 
-    let fullText = "";
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((i) => i.str).join(" ");
-      fullText += "\n" + pageText;
+    // Find the Package ID column
+    const packageIdIndex = headers.findIndex(
+      (h) =>
+        h === "package id" ||
+        h === "packageid" ||
+        h.includes("package id")
+    );
+
+    if (packageIdIndex === -1) return [];
+
+    const packages = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",");
+      const value = cols[packageIdIndex]?.trim();
+      if (value && isValidMetrcId(value)) {
+        packages.push(value);
+      }
     }
 
-    setDebugTextLength(fullText.length);
-
-    const packages = extractMetrcIds(fullText);
-    setDebugFound(packages.length);
-    setManifestPackages(packages);
-    setScannedPackages([]);
-
-    if (!packages.length) errorBeep();
+    return [...new Set(packages)];
   };
 
   /* 📤 Upload Handler */
@@ -73,23 +72,28 @@ export default function Page() {
 
     setManifestName(file.name);
 
-    if (file.type === "application/pdf") {
-      await handlePdfUpload(file);
+    const text = await file.text();
+    let packages = [];
+
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      packages = extractPackagesFromCsv(text);
     } else {
-      const text = await file.text();
-      setDebugTextLength(text.length);
-      const packages = extractMetrcIds(text);
-      setDebugFound(packages.length);
-      setManifestPackages(packages);
-      setScannedPackages([]);
+      // TXT fallback (strict filtering)
+      packages = [...new Set(text.match(/\b1A[A-Z0-9]{20,28}\b/g) || [])];
     }
+
+    setManifestPackages(packages);
+    setDebugFound(packages.length);
+    setScannedPackages([]);
+
+    if (!packages.length) errorBeep();
   };
 
-  /* 🔫 Scan */
+  /* 🔫 Scan Handler */
   const handleAdd = () => {
     const code = barcode.trim();
 
-    if (!/^1A[A-Z0-9]{20,28}$/.test(code)) {
+    if (!isValidMetrcId(code)) {
       errorBeep();
       setBarcode("");
       return;
@@ -111,19 +115,18 @@ export default function Page() {
   );
 
   return (
-    <main style={{ maxWidth: 680, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <main style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest (PDF / TXT / CSV)</strong><br />
+        <strong>Upload Manifest (CSV recommended)</strong><br />
         <input
           type="file"
-          accept=".pdf,.txt,.csv"
+          accept=".csv,.txt"
           onChange={handleManifestUpload}
         />
         {manifestName && <p>Loaded: {manifestName}</p>}
         <p style={{ fontSize: 12 }}>
-          Extracted text length: <strong>{debugTextLength}</strong><br />
           Package IDs detected: <strong>{debugFound}</strong>
         </p>
       </div>
