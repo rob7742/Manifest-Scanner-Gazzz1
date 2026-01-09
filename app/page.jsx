@@ -8,38 +8,18 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [manifestName, setManifestName] = useState("");
 
-  // 🔹 CSV PACKAGE-ID-ONLY EXTRACTOR
-  const extractPackagesFromCsv = (text) => {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length < 2) return [];
+  // 🔹 GLOBAL METRC PACKAGE ID REGEX
+  const METRC_REGEX = /\b1A[A-Z0-9]{20,28}\b/g;
 
-    const headers = lines[0]
-      .split(",")
-      .map((h) => h.trim().toLowerCase());
+  // 🔹 CSV / TEXT PARSER — PACKAGE IDS ONLY
+  const extractPackages = (text) => {
+    const matches = text.match(METRC_REGEX) || [];
 
-    // STRICT match — avoids Source / Parent / Origin IDs
-    const packageIdIndex = headers.findIndex(
-      (h) => h === "package id" || h === "package_id"
-    );
-
-    if (packageIdIndex === -1) return [];
-
-    const packages = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",");
-      const value = cols[packageIdIndex]?.trim();
-
-      // METRC Package ID format ONLY
-      if (value && /^1A[A-Z0-9]{20,28}$/.test(value)) {
-        packages.push(value);
-      }
-    }
-
-    return [...new Set(packages)];
+    // Deduplicate + sort for consistency
+    return [...new Set(matches)];
   };
 
-  // 🔹 FILE UPLOAD HANDLER
+  // 🔹 MANIFEST UPLOAD HANDLER
   const handleManifestUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -47,13 +27,18 @@ export default function Page() {
     setManifestName(file.name);
 
     const text = await file.text();
-    const packages = extractPackagesFromCsv(text);
+    const packages = extractPackages(text);
+
+    if (packages.length === 0) {
+      alert("❌ No METRC package IDs detected in file");
+      return;
+    }
 
     setManifestPackages(packages);
     setScannedPackages([]);
   };
 
-  // 🔹 SCAN / ADD HANDLER (NO DUPLICATES)
+  // 🔹 SCAN HANDLER
   const handleAdd = () => {
     const code = barcode.trim();
     if (!code) return;
@@ -83,9 +68,13 @@ export default function Page() {
       <h1>Manifest Barcode Verification</h1>
 
       <div style={{ marginTop: 20 }}>
-        <strong>Upload Manifest (CSV)</strong>
+        <strong>Upload Manifest (CSV / TXT)</strong>
         <br />
-        <input type="file" accept=".csv,text/csv" onChange={handleManifestUpload} />
+        <input
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          onChange={handleManifestUpload}
+        />
         {manifestName && <p>Loaded: {manifestName}</p>}
       </div>
 
